@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전북대학교 캠퍼스 내비게이션 (도보 및 직선)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+        .control-panel { display: flex; gap: 10px; margin-bottom: 15px; }
+        select { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #ffe812; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #e6d010; }
+        .info-box { padding: 15px; background-color: #eef7ff; border-radius: 5px; text-align: center; font-size: 16px; color: #0056b3; margin-bottom: 15px; display: none; }
+        .info-box strong { font-size: 18px; }
+        #map { width: 100%; height: 450px; border-radius: 5px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>전북대학교 길찾기</h2>
+    <div class="subtitle">도보 최적 경로 지원 (Tmap 연동)</div>
+    
+    <div class="control-panel">
+        <select id="buildingSelect">
+            <option value="">도착할 건물을 선택하세요</option>
+        </select>
+        <button onclick="calculateRoute()">길찾기 시작</button>
+    </div>
+
+    <div id="infoBox" class="info-box"></div>
+    <div id="map"></div>
+</div>
+
+<!-- 카카오맵 JavaScript API (지도 그리기용) -->
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=63bce19d200ece0aeea74328900cb480"></script>
+
+<script>
+    // [중요] Tmap API 키를 입력하면 1안(인도 기준 길찾기)이 작동합니다.
+    // 키를 비워두거나 에러가 나면 자동으로 2안(직선거리)으로 작동합니다.
+    const TMAP_API_KEY = 'UQOTJgDWkx2HRuf7Pu7IYa0ipIGHndHU1vjKLc5o'; 
+
+    // 110개 전북대 건물 데이터
+    const buildings = [
+    {"건물명": "JBNU인터내셔널센터", "위도": 35.844373, "경도": 127.13034},
+    {"건물명": "간호대학", "위도": 35.84703, "경도": 127.144914},
+    {"건물명": "경상대학 2호관", "위도": 35.844713, "경도": 127.135275},
+    {"건물명": "경상대학1호관", "위도": 35.844714, "경도": 127.133881},
+    {"건물명": "경상대학3호관", "위도": 35.844586, "경도": 127.135953},
+    {"건물명": "골프존 신전주", "위도": 35.841983, "경도": 127.135877},
+    {"건물명": "공과대학 6호관", "위도": 35.847122, "경도": 127.134434},
+    {"건물명": "공과대학 7호관", "위도": 35.846055, "경도": 127.13441},
+    {"건물명": "공과대학1호관", "위도": 35.846641, "경도": 127.132525},
+    {"건물명": "공과대학2호관", "위도": 35.846948, "경도": 127.131626},
+    {"건물명": "공과대학3호관", "위도": 35.846975, "경도": 127.133482},
+    {"건물명": "공과대학4호관", "위도": 35.847517, "경도": 127.132499},
+    {"건물명": "공과대학5호관", "위도": 35.847554, "경도": 127.131269},
+    {"건물명": "공과대학8호관", "위도": 35.84828, "경도": 127.133501},
+    {"건물명": "공과대학9호관", "위도": 35.847635, "경도": 127.13362},
+    {"건물명": "공과대학부속공장", "위도": 35.846588, "경도": 127.134893},
+    {"건물명": "공동실험실습관", "위도": 35.847714, "경도": 127.144482},
+    {"건물명": "글로벌인재관", "위도": 35.845602, "경도": 127.133187},
+    {"건물명": "농업생명과학대학1호관", "위도": 35.849155, "경도": 127.130806},
+    {"건물명": "농업생명과학대학3호관", "위도": 35.848607, "경도": 127.134618},
+    {"건물명": "농업생명과학대학4호관", "위도": 35.848418, "경도": 127.135592},
+    {"건물명": "대운동장", "위도": 35.847688, "경도": 127.128032},
+    {"건물명": "대학본부", "위도": 35.8444, "경도": 127.131334},
+    {"건물명": "대학본부 별관", "위도": 35.844943, "경도": 127.13219},
+    {"건물명": "대형풍동실험센터", "위도": 35.849197, "경도": 127.125927},
+    {"건물명": "동아리전용관", "위도": 35.848559, "경도": 127.128543},
+    {"건물명": "로스알라모스 한국공학연구소", "위도": 35.847534, "경도": 127.136445},
+    {"건물명": "문회루", "위도": 35.846861, "경도": 127.129376},
+    {"건물명": "반도체공정연구센터", "위도": 35.848764, "경도": 127.145462},
+    {"건물명": "반도체물성연구소", "위도": 35.848818, "경도": 127.144722},
+    {"건물명": "사회과학대학", "위도": 35.844062, "경도": 127.133725},
+    {"건물명": "삼성문화회관", "위도": 35.843211, "경도": 127.130056},
+    {"건물명": "사범대학본관", "위도": 35.842609, "경도": 127.131953},
+    {"건물명": "사범대학교육연구동", "위도": 35.845489, "경도": 127.13084},
+    {"건물명": "생활과학대학", "위도": 35.84255, "경도": 127.132662},
+    {"건물명": "생활관", "위도": 35.851034, "경도": 127.127028},
+    {"건물명": "생활관 대동관", "위도": 35.851504, "경도": 127.126192},
+    {"건물명": "생활관 새빛관", "위도": 35.851966, "경도": 127.128608},
+    {"건물명": "생활관 참빛관", "위도": 35.850761, "경도": 127.126084},
+    {"건물명": "생활관 한빛관", "위도": 35.851103, "경도": 127.128746},
+    {"건물명": "성원법학도서관", "위도": 35.844726, "경도": 127.133093},
+    {"건물명": "숲속어린이집", "위도": 35.847729, "경도": 127.14581},
+    {"건물명": "야외음악당", "위도": 35.848924, "경도": 127.128136},
+    {"건물명": "약학대학", "위도": 35.848399, "경도": 127.144843},
+    {"건물명": "예술대학 2호관", "위도": 35.850838, "경도": 127.128002},
+    {"건물명": "예술대학 3호관", "위도": 35.846171, "경도": 127.126688},
+    {"건물명": "예술대학 본관", "위도": 35.850464, "경도": 127.127297},
+    {"건물명": "예체능관", "위도": 35.847783, "경도": 127.129648},
+    {"건물명": "의과대학", "위도": 35.847049, "경도": 127.142682},
+    {"건물명": "의과대학2호관", "위도": 35.84805, "경도": 127.142135},
+    {"건물명": "의과대학4호관(의생명융합관)", "위도": 35.846849, "경도": 127.144059},
+    {"건물명": "의대교수연구동", "위도": 35.84756, "경도": 127.141966},
+    {"건물명": "의학계 학생회관", "위도": 35.848337, "경도": 127.143177},
+    {"건물명": "의학도서관", "위도": 35.847734, "경도": 127.143449},
+    {"건물명": "의학전문대학원생명과학관", "위도": 35.847525, "경도": 127.144371},
+    {"건물명": "이마트24 전북대훈산건지점", "위도": 35.851724, "경도": 127.129289},
+    {"건물명": "인문대학1호관", "위도": 35.843241, "경도": 127.132993},
+    {"건물명": "인문대학2호관", "위도": 35.844168, "경도": 127.132751},
+    {"건물명": "인문대학 중어중문학과", "위도": 35.843157, "경도": 127.133908},
+    {"건물명": "익산근대역사관", "위도": 35.938085, "경도": 126.948014},
+    {"건물명": "자연과학대학본관", "위도": 35.847472, "경도": 127.13064},
+    {"건물명": "자연과학대학1호관", "위도": 35.845269, "경도": 127.127391},
+    {"건물명": "자연과학대학2호관", "위도": 35.845095, "경도": 127.128865},
+    {"건물명": "자연과학대학3호관", "위도": 35.847058, "경도": 127.130475},
+    {"건물명": "자연과학대학4호관", "위도": 35.846646, "경도": 127.130709},
+    {"건물명": "자연과학대학5호관", "위도": 35.84616, "경도": 127.130708},
+    {"건물명": "자연사박물관", "위도": 35.845958, "경도": 127.127551},
+    {"건물명": "전대학술문화관", "위도": 35.844946, "경도": 127.129852},
+    {"건물명": "전북 대학교 소운동장", "위도": 35.846697, "경도": 127.127698},
+    {"건물명": "전북대학교병원 노인보건의료센터", "위도": 35.845753, "경도": 127.139696},
+    {"건물명": "전북대학교병원 어린이병원", "위도": 35.848084, "경도": 127.141024},
+    {"건물명": "전북대학교병원 임상연구지원센터", "위도": 35.848835, "경도": 127.140011},
+    {"건물명": "전북대학교병원 장례식장", "위도": 35.849036, "경도": 127.140902},
+    {"건물명": "전북대학교병원 전북지역암센터", "위도": 35.846881, "경도": 127.140256},
+    {"건물명": "전북대학교병원 호흡기전문질환센터", "위도": 35.847687, "경도": 127.141205},
+    {"건물명": "전북대학교병원 권역응급의료센터", "위도": 35.846251, "경도": 127.139746},
+    {"건물명": "전북대학교병원 본관", "위도": 35.846699, "경도": 127.141358},
+    {"건물명": "전북대학교사범대학부설고등학교", "위도": 35.845908, "경도": 127.136071},
+    {"건물명": "전북대학교치과병원", "위도": 35.846972, "경도": 127.139366},
+    {"건물명": "전북지역산업진흥원", "위도": 35.843643, "경도": 127.134645},
+    {"건물명": "전주서문초등학교", "위도": 35.829801, "경도": 127.112292},
+    {"건물명": "전주소통협력센터 본관", "위도": 35.825274, "경도": 127.146744},
+    {"건물명": "전주실내체육관", "위도": 35.84421, "경도": 127.129261},
+    {"건물명": "전주캠퍼스", "위도": 35.845721, "경도": 127.129605},
+    {"건물명": "정보혁신본부", "위도": 35.843989, "경도": 127.1348},
+    {"건물명": "정보혁신처 정보화교육동", "위도": 35.843786, "경도": 127.135261},
+    {"건물명": "중앙도서관", "위도": 35.848336, "경도": 127.132027},
+    {"건물명": "중재적 메카노 바이오 기술융합연구센터", "위도": 35.847262, "경도": 127.136533},
+    {"건물명": "진수원식당", "위도": 35.845193, "경도": 127.131504},
+    {"건물명": "창의관", "위도": 35.847731, "경도": 127.137242},
+    {"건물명": "창조1관", "위도": 35.847546, "경도": 127.13551},
+    {"건물명": "창조2관", "위도": 35.847182, "경도": 127.135696},
+    {"건물명": "치과대학", "위도": 35.845899, "경도": 127.13835},
+    {"건물명": "치과대학 2호관", "위도": 35.845578, "경도": 127.138283},
+    {"건물명": "치과대학 3호관", "위도": 35.846577, "경도": 127.138015},
+    {"건물명": "치과대학 4호관", "위도": 35.847388, "경도": 127.137706},
+    {"건물명": "테니스장3", "위도": 35.846915, "경도": 127.125981},
+    {"건물명": "학생교직원전용 보건진료소", "위도": 35.846326, "경도": 127.128528},
+    {"건물명": "학생타운", "위도": 35.845809, "경도": 127.128122},
+    {"건물명": "학군단", "위도": 35.846126, "경도": 127.131519},
+    {"건물명": "한승헌도서관", "위도": 35.844653, "경도": 127.132634},
+    {"건물명": "항공교육실습장", "위도": 35.847024, "경도": 127.1245},
+    {"건물명": "헌혈의집 전북대한옥센터", "위도": 35.844601, "경도": 127.127527},
+    {"건물명": "혁신의료기기비임상센터", "위도": 35.847544, "경도": 127.135524},
+    {"건물명": "후생관", "위도": 35.847744, "경도": 127.134544},
+    {"건물명": "희망전북창업보육센타", "위도": 35.852155, "경도": 127.100332}
+];
+
+    // 드롭다운 세팅
+    const selectBox = document.getElementById('buildingSelect');
+    buildings.forEach((b, index) => {
+        let option = document.createElement('option');
+        option.value = index;
+        option.text = b.건물명;
+        selectBox.appendChild(option);
+    });
+
+    // 카카오맵 초기화
+    var mapContainer = document.getElementById('map');
+    var mapOption = { center: new kakao.maps.LatLng(35.8467, 127.1290), level: 4 };
+    var map = new kakao.maps.Map(mapContainer, mapOption);
+
+    var currentPolyline = null;
+    var destMarker = null;
+    var myMarker = null;
+    var myLat = null;
+    var myLng = null;
+    var isFirstLocation = true;
+
+    // 실시간 GPS 추적
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(function(position) {
+            myLat = position.coords.latitude;
+            myLng = position.coords.longitude;
+            var newPos = new kakao.maps.LatLng(myLat, myLng);
+
+            if (myMarker) {
+                myMarker.setPosition(newPos);
+            } else {
+                myMarker = new kakao.maps.Marker({ position: newPos, map: map, title: "내 위치" });
+            }
+
+            if (isFirstLocation) {
+                map.setCenter(newPos);
+                isFirstLocation = false;
+            }
+        }, function(error) {
+            console.error("GPS 위치 에러:", error);
+        }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+    }
+
+    // 길찾기 로직 (Tmap 도보 1안 -> 실패 시 직선 2안)
+    function calculateRoute() {
+        if (myLat === null) {
+            alert("현재 위치를 아직 찾고 있습니다. GPS를 허용했는지 확인해 주세요.");
+            return;
+        }
+
+        let selectedIndex = selectBox.value;
+        if (selectedIndex === "") {
+            alert("도착할 건물을 먼저 선택해 주세요.");
+            return;
+        }
+
+        let dest = buildings[selectedIndex]; 
+
+        // 기존 마커와 선 지우기
+        if (currentPolyline) currentPolyline.setMap(null);
+        if (destMarker) destMarker.setMap(null);
+
+        // 도착지 마커 생성
+        destMarker = new kakao.maps.Marker({
+            position: new kakao.maps.LatLng(dest.위도, dest.경도),
+            map: map,
+            title: dest.건물명
+        });
+
+        // Tmap API 키가 없으면 바로 2안(직선거리) 실행
+        if(!TMAP_API_KEY || TMAP_API_KEY === '여기에_TMAP_API_키_입력') {
+            drawStraightLine(dest);
+            return;
+        }
+
+        // 1안: Tmap 도보 경로 API 호출
+        fetch("https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json", {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "appKey": TMAP_API_KEY
+            },
+            body: JSON.stringify({
+                startX: myLng,
+                startY: myLat,
+                endX: dest.경도,
+                endY: dest.위도,
+                reqCoordType: "WGS84GEO",
+                resCoordType: "WGS84GEO",
+                startName: "출발지",
+                endName: "도착지"
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.error) {
+                console.warn("Tmap 에러 발생. 2안(직선거리)으로 대체합니다.", data.error);
+                drawStraightLine(dest);
+                return;
+            }
+
+            // Tmap 데이터에서 거리/시간 추출
+            let distanceMeters = data.features[0].properties.totalDistance;
+            let timeMinutes = Math.ceil(data.features[0].properties.totalTime / 60);
+            
+            showInfoBox(`🏁 [${dest.건물명}]까지 도보 최적 경로<br>거리: <strong>${distanceMeters}m</strong> (약 ${timeMinutes}분)`);
+
+            // 선 긋기
+            let linePath = [];
+            data.features.forEach(feature => {
+                if(feature.geometry.type === "LineString") {
+                    feature.geometry.coordinates.forEach(coord => {
+                        // Tmap은 [경도, 위도] 순서로 반환하므로 카카오맵 기준(위도, 경도)으로 뒤집어줌
+                        linePath.push(new kakao.maps.LatLng(coord[1], coord[0]));
+                    });
+                }
+            });
+
+            drawPolylineAndZoom(linePath, dest);
+        })
+        .catch(error => {
+            console.error("통신 에러 발생. 2안(직선거리)으로 대체합니다.", error);
+            drawStraightLine(dest);
+        });
+    }
+
+    // 2안: 직선 거리 계산 및 그리기 함수 (API 키가 없거나 에러 났을 때 작동)
+    function drawStraightLine(dest) {
+        let linePath = [
+            new kakao.maps.LatLng(myLat, myLng),
+            new kakao.maps.LatLng(dest.위도, dest.경도)
+        ];
+        
+        // 임시 폴리라인을 그려서 카카오맵 기능으로 직선거리 계산
+        let tempPolyline = new kakao.maps.Polyline({ path: linePath });
+        let distanceMeters = Math.round(tempPolyline.getLength());
+        // 성인 평균 도보 속도(시속 4km, 분당 67m) 기준 시간 계산
+        let timeMinutes = Math.ceil(distanceMeters / 67); 
+
+        showInfoBox(`🏁 [${dest.건물명}]까지 직선 경로 (API 미연동)<br>직선 거리: <strong>${distanceMeters}m</strong> (도보 약 ${timeMinutes}분)`);
+        
+        drawPolylineAndZoom(linePath, dest);
+    }
+
+    // 공통 기능: 정보창 띄우기
+    function showInfoBox(htmlContent) {
+        let infoBox = document.getElementById('infoBox');
+        infoBox.style.display = "block";
+        infoBox.innerHTML = htmlContent;
+    }
+
+    // 공통 기능: 지도에 선 그리고 출발/도착지 한 화면에 맞추기
+    function drawPolylineAndZoom(linePath, dest) {
+        currentPolyline = new kakao.maps.Polyline({
+            path: linePath,
+            strokeWeight: 6,
+            strokeColor: '#FF0000',
+            strokeOpacity: 0.8,
+            strokeStyle: 'solid'
+        });
+        currentPolyline.setMap(map);
+
+        let bounds = new kakao.maps.LatLngBounds();
+        bounds.extend(new kakao.maps.LatLng(myLat, myLng));
+        bounds.extend(new kakao.maps.LatLng(dest.위도, dest.경도));
+        map.setBounds(bounds);
+    }
+</script>
+</body>
+</html>
